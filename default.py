@@ -49,6 +49,7 @@ class ConnectionBuilder:
     def __init__(self, proxy, use_antizapret):
         self.proxy = proxy
         self.use_antizapret = use_antizapret
+        self.cookie_jar  = None
 
     def build_connection(self, cookiejar=None):
         if cookiejar is None:
@@ -64,8 +65,38 @@ class ConnectionBuilder:
                              ('Accept', '*/*'), ('Accept-Language', 'ru-RU')]
         return opener
 
+    def login_or_none(self):
+        cookiejar = cookielib.CookieJar()
+        url_opener = self.build_connection(cookiejar)
+        values = {'username': ktv_login, 'password': ktv_password}
+        data = urllib.urlencode(values)
+        request = urllib2.Request("http://kinozal.tv/takelogin.php", data)
+        url_opener.open(request)
+        authorized = False
+        for cook in cookiejar:
+            if cook.name == 'pass':
+                authorized = True
+                break
+        if not authorized:
+            return None
+        else:
+            return cookiejar
 
-    
+    def build_authorized_connection(self):
+        xbmc.log('[%s]: build_authorized_connection: cookie_jar state [%s]' % (addon_id, self.cookie_jar), 3)
+        if self.cookie_jar is None:
+            self.cookie_jar = self.login_or_none()
+            if self.cookie_jar is None:
+                showMessage('Ошибка', 'Не верен логин или пароль', 5000)
+        xbmc.log( '[%s]: build_authorized_connection: logged in cookie_jar state [%s]' % (addon_id, self.cookie_jar), 3 )
+        return connection_builder.build_connection(self.cookie_jar)
+
+
+
+
+
+
+
 __addon__ = xbmcaddon.Addon( id = 'plugin.video.const.kinozal.tv' )
 
 where=['названии','имени актера','жанре','формула']
@@ -75,14 +106,14 @@ form=['Все','DVDRip','HDRip','HD Blu-Ray и Remux', 'TVRip']
 cform=['0','1','3','4','5']
 filter=['Все','Золото','Серебро']
 cfilter=['0','11','12']
-print 'YEAR' 
+#print 'YEAR'
 try:
     iwhere=int(__addon__.getSetting('where'))
     ishow=int(__addon__.getSetting('show'))
     iform=int(__addon__.getSetting('form'))
     ifilter=int(__addon__.getSetting('filter'))
     iyear = __addon__.getSetting('year')
-    print 'YEAR %s' %  iwhere
+    #print 'YEAR %s' %  iwhere
     querry=__addon__.getSetting('querry')
 except:
     __addon__.setSetting('where','0')
@@ -127,9 +158,8 @@ ktv_cookies_pass=__addon__.getSetting('cookies_pass')
 ktv_connection_method = __addon__.getSetting('connection_method')
 
 ktv_use_antizapret = ktv_connection_method == 'antizapret'
-ktv_use_proxy = False
+ktv_proxy = None
 if ktv_connection_method == 'proxy':
-    ktv_use_proxy = __addon__.getSetting('use_proxy')
     ktv_proxy_host = __addon__.getSetting('proxy_host')
     ktv_proxy_port = __addon__.getSetting('proxy_port')
 
@@ -140,37 +170,21 @@ if ktv_connection_method == 'proxy':
         ktv_proxy_user = __addon__.getSetting('proxy_user')
         ktv_proxy_password = __addon__.getSetting('proxy_password')
 
+    ktv_proxy = ProxyDescriptor(ktv_proxy_host, ktv_proxy_port, ktv_proxy_user, ktv_proxy_password)
+
 
 if not ktv_login or not ktv_password: __addon__.openSettings()
 
-ktv_proxy = None
-if ktv_use_proxy:
-    ktv_proxy = ProxyDescriptor(ktv_proxy_host, ktv_proxy_port, ktv_proxy_user, ktv_proxy_password)
 
 connection_builder = ConnectionBuilder(ktv_proxy, ktv_use_antizapret)
 
 
-def login_or_none():
-    cookiejar = cookielib.CookieJar()
-    url_opener = connection_builder.build_connection(cookiejar)
-    values = {'username': ktv_login, 'password':ktv_password}
-    data = urllib.urlencode(values)
-    request = urllib2.Request("http://kinozal.tv/takelogin.php", data)
-    url_opener.open(request)
-    getted=None
-    for cook in cookiejar:
-        if cook.name=='pass':
-            getted=True
-            break
-    if getted is None:
-        return  None
-    else:
-        return cookiejar
+
 
 
 if not ktv_cookies_uid or not ktv_cookies_pass:
     getted=None
-    cookiejar = login_or_none()
+    cookiejar = connection_builder.login_or_none()
     if cookiejar:
         for cook in cookiejar:
             if cook.name=='uid': ktv_cookies_uid=cook.value
@@ -211,7 +225,7 @@ def GET(target, post=None):
         return http
     except Exception, e:
         xbmc.log( '[%s]: GET EXCEPT [%s]' % (addon_id, e), 4 )
-        showMessage('HTTP ERROR', e, 5000)
+        showMessage('HTTP ERROR', e.message, 5000)
 
         
 def mainScreen(params):
@@ -308,10 +322,10 @@ def PlaceFolder(title,params):
     xbmcplugin.addDirectoryItem(hos, uri, li, True)
     
 def check_item_by_tytle(title):
-	if ("ALAC" in title) or ("Lossless" in title) or ("FLAC" in title):
-		return False
-	else:
-		return True
+    if ("ALAC" in title) or ("Lossless" in title) or ("FLAC" in title):
+        return False
+    else:
+        return True
 
 def get_main(params):
     http = GET(params['link'])
@@ -326,7 +340,7 @@ def get_main(params):
         if 'http' not in img: img='http://kinozal.tv%s'%img
         lik=  str(film.find('a')['href']).split('=')
         torrlink= 'http://kinozal.tv/download.php/%s/[kinozal.tv]id%s.torrent'%(lik[1],lik[1])
-        print torrlink
+        #print torrlink
         info = {}
         desc = '%s' % film.find('div', attrs={'class':'tp1_desc1'})
         genre = desc[desc.find("<b>Жанр:</b>")+17:]
@@ -336,7 +350,7 @@ def get_main(params):
         director = desc[desc.find("<b>Режиссер:</b>") + 25:]
         director = director[:director.find("<br />")]
         xinfos = film.find('div', attrs={'class':'tp1_desc'}).findAll('div')
-        plot = "";
+        plot = ""
         for xdesc in xinfos:
             for tag in xdesc.contents:
                 if tag.__class__.__name__ == 'NavigableString':
@@ -374,9 +388,9 @@ def get_view_mode():
                 if xbmc.getCondVisibility( "Control.IsVisible(%i)" % id ):
                     view_mode = id
                     return view_mode
-                    break
-            except:
-                print 'error'
+            except Exception, e:
+                xbmc.log( '[%s]: VIEW MODE EXCEPT [%s]' % (addon_id, e), 4 )
+                showMessage('GET VIEW MODE ERROR', e.message, 5000)
                 pass
         return view_mode
 
@@ -547,13 +561,13 @@ def get_by_like(container, img, info, id):
     return lis
 
 def get_info(params):
-    current_view = get_view_mode();
+    current_view = get_view_mode()
 
     http = GET(params["url"])
     beautifulSoup = BeautifulSoup(http)
     all = beautifulSoup.find('div',attrs={'class':'mn_wrap'})
 
-    if (all == None):
+    if (all is None):
         showMessage("Ошибка", "Торрент не найден")
         return
     img = all.find('img',attrs={'class':"p200"})["src"]
@@ -561,8 +575,8 @@ def get_info(params):
         img='http://kinozal.tv%s'%img
     menu = all.find('ul', attrs={"class": "men w200"})
     mitems = menu.findAll('a')
-    sp = "";
-    fc = 1;
+    sp = ""
+    fc = 1
     bookmark = None
     for link in mitems:
         if "Раздают" in link.getText().encode('utf-8'):
@@ -579,7 +593,7 @@ def get_info(params):
     for tag in all.contents:
         if (tag.name == "div"):
             tag_title = tag
-            break;
+            break
     
     title = "[COLOR=FF008BEE][%s][%s]%s[/COLOR]" % (star.__len__(),sp.encode('utf-8'),tag_title.h1.a.getText().encode('utf-8'))
     id = params['url'].split('=')[1]
@@ -601,7 +615,7 @@ def get_info(params):
     genre = genre[:genre.find('<br />')]
     info['year'] = year
     info['genre'] = genre
-    plot = "";
+    plot = ""
 
     plot = get_plot(xinfo[0].h2)
     plot = plot + '\n' + get_plot(xinfo[1].p)
@@ -664,7 +678,7 @@ def get_info(params):
 
     bx20 = bx1.find('div', attrs={'class': 'justify mn2'})
     lis_like = []
-    if (bx20.div.table != None):
+    if (bx20.div.table is not None):
         lis_like = get_by_like(bx20, img, info, id)
     lis_genre = get_by_genre(img, info, id)
     lis_persone = get_by_persone(img, info, id)
@@ -709,10 +723,11 @@ def get_search(params):
         link='http://kinozal.tv/browse.php?s=%s&g=%s&c=%s&v=%s&d=%s&w=%s&t=0&f=0'%(urllib.quote_plus(qu),g,c,v,iyear, w)
 
     except Exception, e:
-        print 'Error %s' % e
+        xbmc.log( '[%s]: SEARCH ERROR [%s]' % (addon_id, e), 4 )
+        showMessage('SEARCh ERROR', e.message, 5000)
         return
-        link='http://kinozal.tv/browse.php?s=&g=0&c=0&v=0&d=0&w=0&t=0&f=0'
-    print link
+        #Unrechable string link='http://kinozal.tv/browse.php?s=&g=0&c=0&v=0&d=0&w=0&t=0&f=0'
+    #print link
     http = GET(link)
     beautifulSoup = BeautifulSoup(http)
     cat= beautifulSoup.findAll('tr')
@@ -829,8 +844,7 @@ def get_folder(params):
 
 
 def http_request(params):
-    cookiejar = login_or_none()
-    url_opener = connection_builder.build_connection(cookiejar)
+    url_opener = connection_builder.build_authorized_connection()
     # TODO: reimplement
     req = params['url']
     http = None
@@ -843,16 +857,15 @@ def del_bookmark(params):
     xbmc.executebuiltin("Container.Refresh")
 
 def get_bookmarks(params):
-    cookiejar = login_or_none()
     req = 'http://kinozal.tv/bookmarks.php?type=1'
-    url_opener = connection_builder.build_connection(cookiejar)
+    url_opener = connection_builder.build_authorized_connection()
     url = url_opener.open(req)
     http = url.read()
     beautifulSoup = BeautifulSoup(http)
     
-    bx20 = beautifulSoup.find('div', attrs={'class': 'content'}).find('div', attrs={'class':'bx2_0'});
+    bx20 = beautifulSoup.find('div', attrs={'class': 'content'}).find('div', attrs={'class':'bx2_0'})
     if bx20:
-        table = bx20.table.findAll('tr');
+        table = bx20.table.findAll('tr')
 
         for line in table:
             if line.has_key('class') and line['class'] == 'mn':
@@ -874,9 +887,8 @@ def get_bookmarks(params):
     xbmcplugin.endOfDirectory(hos)
 
 def download(params):
-    cookiejar = login_or_none()
     torr_link = params['url']
-    url_opener = connection_builder.build_connection(cookiejar)
+    url_opener = connection_builder.build_authorized_connection()
     request = urllib2.Request(torr_link)
     url = url_opener.open(request)
     red = url.read()
@@ -889,7 +901,7 @@ def download(params):
     showMessage('Kinozal.TV', 'Торрент-файл скачан') 
 
 def play(params):
-    print 'palyyy'
+    #print 'palyyy'
     filename=xbmc.translatePath(ktv_folder + params['filename'])
     ''' if os.path.isfile(filename): 
         try: 
@@ -899,13 +911,13 @@ def play(params):
             #f.close
             #print red.encode('utf-8')
         except: pass
+        except: pass
     else:	'''
 
-    cookiejar = login_or_none()
     torr_link=params['torr_url']
-    url_opener = connection_builder.build_connection(cookiejar)
+    url_opener = connection_builder.build_authorized_connection()
     request = urllib2.Request(torr_link)
-    print torr_link
+    #print torr_link
     url = url_opener.open(request)
     red = url.read()
     if '<!DOCTYPE HTML>' in red:
@@ -970,7 +982,7 @@ def addplist(params):
     })
     xbmc.PlayList(xbmc.PLAYLIST_VIDEO).add(uri,li)
 def play_url2(params):
-    print 'play'
+    #print 'play'
     torr_link=urllib.unquote(params["torr_url"])
     img=urllib.unquote_plus(params["img"])
     title=urllib.unquote_plus(params["title"])
@@ -1032,7 +1044,7 @@ except:
     func = None
     xbmc.log( '[%s]: Primary input' % addon_id, 1 )
     mainScreen(params)
-if func != None:
+if func is not None:
     try: pfunc = globals()[func]
     except:
         pfunc = None
