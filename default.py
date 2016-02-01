@@ -23,6 +23,7 @@ import datetime
 from BeautifulSoup import BeautifulSoup, BeautifulStoneSoup
 from ASCore import TSengine,_TSPlayer
 from urllib import unquote, quote
+import antizapret
 
 
 class ProxyDescriptor:
@@ -45,17 +46,21 @@ class ProxyDescriptor:
 
 
 class ConnectionBuilder:
-    def __init__(self, proxy):
+    def __init__(self, proxy, use_antizapret):
         self.proxy = proxy
+        self.use_antizapret = use_antizapret
 
-    def build_connection(self, cookiejar = None):
+    def build_connection(self, cookiejar=None):
         if cookiejar is None:
             cookiejar = cookielib.CookieJar()
         handlers = [urllib2.HTTPCookieProcessor(cookiejar)]
         if not (self.proxy is None):
             self.proxy.build_handlers(handlers)
+        elif self.use_antizapret:
+            handlers.append(antizapret.AntizapretProxyHandler())
         opener = urllib2.build_opener(*handlers)
-        opener.addheaders = [('User-Agent','Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1) ; .NET CLR 1.1.4322; .NET CLR 2.0.50727; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729; .NET4.0C)'),
+        opener.addheaders = [('User-Agent',
+                              'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1) ; .NET CLR 1.1.4322; .NET CLR 2.0.50727; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729; .NET4.0C)'),
                              ('Accept', '*/*'), ('Accept-Language', 'ru-RU')]
         return opener
 
@@ -119,16 +124,21 @@ ktv_folder=__addon__.getSetting('download_path')
 ktv_cookies_uid=__addon__.getSetting('cookies_uid')
 ktv_cookies_pass=__addon__.getSetting('cookies_pass')
 
-ktv_use_proxy=__addon__.getSetting('use_proxy')
-ktv_proxy_host=__addon__.getSetting('proxy_host')
-ktv_proxy_port=__addon__.getSetting('proxy_port')
+ktv_connection_method = __addon__.getSetting('connection_method')
 
-ktv_proxy_user=None
-ktv_proxy_password =None
-ktv_use_proxy_auth=__addon__.getSetting('use_proxy_auth')
-if ktv_use_proxy_auth:
-    ktv_proxy_user=__addon__.getSetting('proxy_user')
-    ktv_proxy_password=__addon__.getSetting('proxy_password')
+ktv_use_antizapret = ktv_connection_method == 'Antizapret'
+ktv_use_proxy = False
+if ktv_connection_method == 'Proxy':
+    ktv_use_proxy = __addon__.getSetting('use_proxy')
+    ktv_proxy_host = __addon__.getSetting('proxy_host')
+    ktv_proxy_port = __addon__.getSetting('proxy_port')
+
+    ktv_proxy_user = None
+    ktv_proxy_password = None
+    ktv_use_proxy_auth = __addon__.getSetting('use_proxy_auth')
+    if ktv_use_proxy_auth:
+        ktv_proxy_user = __addon__.getSetting('proxy_user')
+        ktv_proxy_password = __addon__.getSetting('proxy_password')
 
 
 if not ktv_login or not ktv_password: __addon__.openSettings()
@@ -137,7 +147,7 @@ ktv_proxy = None
 if ktv_use_proxy:
     ktv_proxy = ProxyDescriptor(ktv_proxy_host, ktv_proxy_port, ktv_proxy_user, ktv_proxy_password)
 
-connection_builder = ConnectionBuilder(ktv_proxy)
+connection_builder = ConnectionBuilder(ktv_proxy, ktv_use_antizapret)
 
 
 def login_or_none():
