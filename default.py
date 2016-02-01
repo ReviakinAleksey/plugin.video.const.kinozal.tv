@@ -126,9 +126,9 @@ ktv_cookies_pass=__addon__.getSetting('cookies_pass')
 
 ktv_connection_method = __addon__.getSetting('connection_method')
 
-ktv_use_antizapret = ktv_connection_method == 'Antizapret'
+ktv_use_antizapret = ktv_connection_method == 'antizapret'
 ktv_use_proxy = False
-if ktv_connection_method == 'Proxy':
+if ktv_connection_method == 'proxy':
     ktv_use_proxy = __addon__.getSetting('use_proxy')
     ktv_proxy_host = __addon__.getSetting('proxy_host')
     ktv_proxy_port = __addon__.getSetting('proxy_port')
