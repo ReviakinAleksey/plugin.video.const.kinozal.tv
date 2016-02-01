@@ -6,9 +6,9 @@
 	<setting id="download_path" type="folder" label="Папка для .torrent файлов" default="" />
     <setting id="connection_method" type="select" label="Способ подключения к kinozal.tv" values="direct|antizapret|proxy" default="false" />
     <setting id="proxy_host" type="text" label="Proxy Host" default="" visible="eq(-1,proxy)" />
-    <setting id="proxy_port" type="number" label="Proxy Port" visible="eq(-2,true) + eq(-2,proxy)"  />
-    <setting id="use_proxy_auth"  type="bool" label="Прокси требует авторизации" default="false" visible="eq(-3,true) + eq(-3,proxy)"/>
-    <setting id="proxy_user" type="text" label="Proxy User" default="" visible="eq(-1,true) + eq(-4,proxy)"/>
-    <setting id="proxy_password" type="text" label="Proxy Password" default="" visible="eq(-2,true) + eq(-5,proxy)" />
+    <setting id="proxy_port" type="number" label="Proxy Port" visible="eq(-2,proxy)"  />
+    <setting id="use_proxy_auth"  type="bool" label="Прокси требует авторизации" default="false" visible="eq(-3,proxy)"/>
+    <setting id="proxy_user" type="text" label="Proxy User" default="" visible="eq(-4,proxy)"/>
+    <setting id="proxy_password" type="text" label="Proxy Password" default="" visible="eq(-5,proxy)" />
   </category>
 </settings>
